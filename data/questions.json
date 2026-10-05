@@ -1,0 +1,110 @@
+{
+  "_설명": "질문 목록. 순서대로 묻되 show_if 조건을 모두 만족하는 질문만 보여준다. field 이름은 products.json의 조건에서 그대로 쓴다.",
+  "questions": [
+    {
+      "id": "age", "no": "Q1", "type": "age",
+      "text": "본인과 배우자분의 나이를 알려주세요",
+      "help": "만 나이로 적어주세요. 배우자가 없으시면 비워두세요.",
+      "show_if": []
+    },
+    {
+      "id": "houses", "no": "Q2", "type": "choice",
+      "text": "부부가 가진 집은 모두 몇 채인가요?",
+      "options": [["1", "1채"], ["2", "2채"], ["3", "3채 이상"]],
+      "guide": {"text": "위택스에서 재산세 납부 내역을 보면 가진 집을 모두 확인할 수 있어요.",
+                "links": [["위택스", "https://www.wetax.go.kr"]]},
+      "show_if": []
+    },
+    {
+      "id": "price", "no": "Q3", "type": "choice",
+      "text": "집의 공시가격은 얼마인가요?",
+      "help": "집이 여러 채면 모두 더한 금액으로 골라주세요. 시세(매매가)가 아니라 공시가격이에요.",
+      "options": [["le", "12억 원 이하"], ["gt", "12억 원 초과"]],
+      "guide": {"text": "부동산공시가격알리미에서 [공시가격 조회] → 주소 입력 → 공시가격을 확인하세요.",
+                "links": [["부동산공시가격알리미", "https://www.realtyprice.kr"]]},
+      "show_if": []
+    },
+    {
+      "id": "type", "no": "Q4", "type": "choice",
+      "text": "어떤 종류의 집인가요?",
+      "options": [["apt", "아파트"], ["house", "단독주택·빌라"], ["off", "주거용 오피스텔"], ["etc", "상가주택 등"]],
+      "guide": {"text": "정부24에서 건축물대장을 열람하면 집의 용도를 확인할 수 있어요.",
+                "links": [["정부24", "https://www.gov.kr"]]},
+      "show_if": []
+    },
+    {
+      "id": "live", "no": "Q5", "type": "choice",
+      "text": "지금 그 집에 살고 계신가요?",
+      "options": [["yes", "예, 살고 있어요"], ["tmp", "입원·요양 등으로 잠시 못 살고 있어요"], ["no", "아니요"]],
+      "guide": {"text": "정부24에서 주민등록등본을 발급받아 주소가 이 집인지 확인해 보세요.",
+                "links": [["정부24", "https://www.gov.kr"]]},
+      "show_if": []
+    },
+    {
+      "id": "farm", "no": "Q6", "type": "choice",
+      "text": "농사를 짓고 계신가요?",
+      "options": [["yes", "예"], ["no", "아니요"]],
+      "guide": {"text": "정부24에서 농업경영체 등록확인서를 발급받거나, 가까운 농·축협에 물어보세요.",
+                "links": [["정부24", "https://www.gov.kr"]]},
+      "show_if": [{"field": "age_self", "op": ">=", "value": 55}]
+    },
+    {
+      "id": "basic", "no": "Q7", "type": "choice",
+      "text": "부부 중 한 분이라도 기초연금을 받고 계신가요?",
+      "options": [["yes", "예"], ["no", "아니요"]],
+      "guide": {"text": "복지로에서 조회하거나 국민연금공단(☎ 1355)에 전화해 보세요.",
+                "links": [["복지로", "https://www.bokjiro.go.kr"]]},
+      "show_if": [{"field": "age_older", "op": ">=", "value": 55},
+                  {"field": "houses", "op": "in", "value": ["1"]},
+                  {"field": "price", "op": "in", "value": ["le"]}]
+    },
+    {
+      "id": "cheap", "no": "Q7-1", "type": "choice",
+      "text": "집 시세가 2억 5천만 원보다 낮은가요?",
+      "options": [["yes", "예, 더 낮아요"], ["no", "아니요"]],
+      "guide": {"text": "KB부동산이나 국토교통부 실거래가 공개시스템에서 최근 시세를 확인하세요.",
+                "links": [["KB부동산", "https://kbland.kr"], ["국토부 실거래가", "https://rt.molit.go.kr"]]},
+      "show_if": [{"field": "basic", "op": "in", "value": ["yes"]}]
+    },
+    {
+      "id": "job", "no": "Q9", "type": "choice",
+      "text": "최근 회사를 그만두셨거나 사업을 접으셨나요?",
+      "options": [["yes", "예"], ["no", "아니요"]],
+      "guide": {"text": "고용24에서 고용보험 이력을, 홈택스에서 폐업사실증명을 확인할 수 있어요.",
+                "links": [["고용24", "https://www.work24.go.kr"], ["홈택스", "https://www.hometax.go.kr"]]},
+      "show_if": [{"field": "age_self", "op": "between", "value": [40, 54]}]
+    },
+    {
+      "id": "own2", "no": "Q10", "type": "choice",
+      "text": "이 집을 가지신 지 2년이 넘었나요?",
+      "options": [["yes", "예"], ["no", "아니요"]],
+      "guide": {"text": "인터넷등기소에서 등기부등본을 열람하면 갑구에서 소유권을 얻은 날짜를 볼 수 있어요.",
+                "links": [["인터넷등기소", "https://www.iros.go.kr"]]},
+      "show_if": [{"field": "price", "op": "in", "value": ["gt"]},
+                  {"field": "age_younger", "op": ">=", "value": 55}]
+    },
+    {
+      "id": "loan", "no": "Q8", "type": "choice",
+      "text": "지금 이 집으로 받은 대출이 남아 있나요?",
+      "options": [["yes", "예"], ["no", "아니요"]],
+      "guide": {"text": "인터넷등기소 등기부등본의 을구에 근저당이 있는지 보거나, 거래하는 은행 앱에서 확인하세요.",
+                "links": [["인터넷등기소", "https://www.iros.go.kr"]]},
+      "show_if": []
+    },
+    {
+      "id": "period", "no": "Q11", "type": "choice",
+      "text": "연금을 어떻게 받고 싶으세요?",
+      "options": [["life", "평생 매달 받고 싶어요"], ["term", "정해진 기간 동안 더 많이 받고 싶어요"]],
+      "guide": {"text": "평생형은 오래 사실수록 유리하지만 매달 받는 돈이 적어요. 기간형은 매달 더 많이 받지만 기간이 끝나면 지급이 멈춰요.",
+                "links": []},
+      "show_if": []
+    },
+    {
+      "id": "lump", "no": "Q12", "type": "choice",
+      "text": "병원비처럼 목돈이 따로 필요하신가요?",
+      "options": [["yes", "예"], ["no", "아니요"]],
+      "allow_unknown": false,
+      "show_if": []
+    }
+  ]
+}
