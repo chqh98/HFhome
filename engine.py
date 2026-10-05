@@ -124,7 +124,9 @@ def judge(product: dict, answers: dict) -> Verdict:
     failed = [label for s, label in results if s == NO]
     unsure = [label for s, label in results if s == CHECK]
 
-    if failed:
+    if product.get("sale_status") == "판매 종료":
+        v = Verdict(product, NO, ["신규 판매가 종료된 상품이에요"])
+    elif failed:
         v = Verdict(product, NO, [f"조건을 충족하지 못함 · {l}" for l in failed])
     elif unsure or product.get("sale_status") != "판매 중":
         reasons = list(unsure)

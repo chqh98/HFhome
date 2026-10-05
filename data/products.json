@@ -3,102 +3,569 @@
   "_조건_형식": "cond: {field, op(in|>=|<=|between), value}. check_values: 이 답이면 '확인 필요'. otherwise: 조건을 못 맞췄을 때 if가 맞으면 result(check|no)로 처리.",
   "products": [
     {
-      "id": "hf_life", "name": "HF 주택연금 · 종신방식", "org": "한국주택금융공사", "pay": "life",
-      "sale_status": "판매 중", "last_checked": "2026-10", "source": "https://www.hf.go.kr",
+      "id": "hf_life",
+      "name": "HF 주택연금 · 종신방식",
+      "org": "한국주택금융공사",
+      "pay": "life",
+      "sale_status": "판매 중",
+      "last_checked": "2026-10",
+      "source": "https://www.hf.go.kr",
       "summary": "평생 매달 연금을 받아요. 정액형·초기증액형·정기증가형 중에서 고를 수 있어요.",
       "requires": "@hf_base",
-      "tips": [{"if": [{"field": "lump", "op": "in", "value": ["yes"]}],
-                "text": "목돈이 필요하면 일부를 미리 찾아 쓰는 '종신혼합방식'을 고르세요."}]
+      "tips": [
+        {
+          "if": [
+            {
+              "field": "lump",
+              "op": "in",
+              "value": [
+                "yes"
+              ]
+            }
+          ],
+          "text": "목돈이 필요하면 일부를 미리 찾아 쓰는 '종신혼합방식'을 고르세요."
+        }
+      ],
+      "profile": {
+        "min_age": 55,
+        "age_basis": "부부 중 한 명",
+        "price_max_eok": 12,
+        "price_min_eok": null,
+        "house_types": [
+          "아파트",
+          "단독·빌라",
+          "주거용 오피스텔"
+        ],
+        "residence": "필수(예외 있음)",
+        "period_type": "종신",
+        "period_max_years": null,
+        "limit_eok": null,
+        "rate": "기준금리(CD 또는 COFIX) + 가산금리 변동",
+        "sale_status": "판매 중"
+      }
     },
     {
-      "id": "hf_term", "name": "HF 주택연금 · 확정기간혼합방식", "org": "한국주택금융공사", "pay": "term",
-      "sale_status": "판매 중", "last_checked": "2026-10", "source": "https://www.hf.go.kr",
+      "id": "hf_term",
+      "name": "HF 주택연금 · 확정기간혼합방식",
+      "org": "한국주택금융공사",
+      "pay": "term",
+      "sale_status": "판매 중",
+      "last_checked": "2026-10",
+      "source": "https://www.hf.go.kr",
       "summary": "10~30년 중 정한 기간 동안 연금을 받아요. 일부는 목돈으로 찾아 쓸 수 있어요.",
-      "requires": ["@hf_base",
-        {"label": "나이가 적은 분이 만 55~74세", "cond": {"field": "age_younger", "op": "between", "value": [55, 74]}}]
+      "requires": [
+        "@hf_base",
+        {
+          "label": "나이가 적은 분이 만 55~74세",
+          "cond": {
+            "field": "age_younger",
+            "op": "between",
+            "value": [
+              55,
+              74
+            ]
+          }
+        }
+      ],
+      "profile": {
+        "min_age": 55,
+        "age_basis": "부부 중 한 명",
+        "price_max_eok": 12,
+        "price_min_eok": null,
+        "house_types": [
+          "아파트",
+          "단독·빌라",
+          "주거용 오피스텔"
+        ],
+        "residence": "필수(예외 있음)",
+        "period_type": "확정기간",
+        "period_max_years": 30,
+        "limit_eok": null,
+        "rate": "기준금리(CD 또는 COFIX) + 가산금리 변동",
+        "sale_status": "판매 중"
+      }
     },
     {
-      "id": "hf_loan", "name": "HF 주택연금 · 대출상환방식", "org": "한국주택금융공사", "pay": "life",
-      "sale_status": "판매 중", "last_checked": "2026-10", "source": "https://www.hf.go.kr",
+      "id": "hf_loan",
+      "name": "HF 주택연금 · 대출상환방식",
+      "org": "한국주택금융공사",
+      "pay": "life",
+      "sale_status": "판매 중",
+      "last_checked": "2026-10",
+      "source": "https://www.hf.go.kr",
       "summary": "남은 주택담보대출을 먼저 갚고, 나머지를 평생 연금으로 받아요.",
-      "requires": ["@hf_base",
-        {"label": "이 집에 남은 담보대출이 있음", "cond": {"field": "loan", "op": "in", "value": ["yes"]}}]
+      "requires": [
+        "@hf_base",
+        {
+          "label": "이 집에 남은 담보대출이 있음",
+          "cond": {
+            "field": "loan",
+            "op": "in",
+            "value": [
+              "yes"
+            ]
+          }
+        }
+      ],
+      "profile": {
+        "min_age": 55,
+        "age_basis": "부부 중 한 명",
+        "price_max_eok": 12,
+        "price_min_eok": null,
+        "house_types": [
+          "아파트",
+          "단독·빌라",
+          "주거용 오피스텔"
+        ],
+        "residence": "필수(예외 있음)",
+        "period_type": "종신",
+        "period_max_years": null,
+        "limit_eok": null,
+        "rate": "기준금리(CD 또는 COFIX) + 가산금리 변동",
+        "sale_status": "판매 중"
+      }
     },
     {
-      "id": "hf_pref", "name": "HF 주택연금 · 우대방식", "org": "한국주택금융공사", "pay": "life",
-      "sale_status": "판매 중", "last_checked": "2026-10", "source": "https://www.hf.go.kr",
+      "id": "hf_pref",
+      "name": "HF 주택연금 · 우대방식",
+      "org": "한국주택금융공사",
+      "pay": "life",
+      "sale_status": "판매 중",
+      "last_checked": "2026-10",
+      "source": "https://www.hf.go.kr",
       "summary": "기초연금을 받는 저가주택 보유자는 일반 종신방식보다 월지급금을 더 받아요.",
-      "requires": ["@hf_base",
-        {"label": "부부 기준 1주택", "cond": {"field": "houses", "op": "in", "value": ["1"]}},
-        {"label": "부부 중 한 분이 기초연금 수급", "cond": {"field": "basic", "op": "in", "value": ["yes"]}},
-        {"label": "집 시세 2억 5천만 원 미만", "cond": {"field": "cheap", "op": "in", "value": ["yes"]}}]
+      "requires": [
+        "@hf_base",
+        {
+          "label": "부부 기준 1주택",
+          "cond": {
+            "field": "houses",
+            "op": "in",
+            "value": [
+              "1"
+            ]
+          }
+        },
+        {
+          "label": "부부 중 한 분이 기초연금 수급",
+          "cond": {
+            "field": "basic",
+            "op": "in",
+            "value": [
+              "yes"
+            ]
+          }
+        },
+        {
+          "label": "집 시세 2억 5천만 원 미만",
+          "cond": {
+            "field": "cheap",
+            "op": "in",
+            "value": [
+              "yes"
+            ]
+          }
+        }
+      ],
+      "profile": {
+        "min_age": 55,
+        "age_basis": "부부 중 한 명",
+        "price_max_eok": 12,
+        "price_min_eok": null,
+        "house_types": [
+          "아파트",
+          "단독·빌라",
+          "주거용 오피스텔"
+        ],
+        "residence": "필수(예외 있음)",
+        "period_type": "종신",
+        "period_max_years": null,
+        "limit_eok": null,
+        "rate": "기준금리(CD 또는 COFIX) + 가산금리 변동",
+        "sale_status": "판매 중"
+      }
     },
     {
-      "id": "kb", "name": "KB 골든라이프 주택연금론", "org": "KB국민은행", "pay": "term",
-      "sale_status": "판매 중", "last_checked": "2026-10",
+      "id": "kb",
+      "name": "KB 골든라이프 주택연금론",
+      "org": "KB국민은행",
+      "pay": "term",
+      "sale_status": "판매 중",
+      "last_checked": "2026-10",
       "source": "https://obank.kbstar.com/quics?page=C103557&cc=b104363:b104516&prcode=LN20000011",
       "summary": "10~30년(5년 단위) 동안 매달 받는 은행 자체 상품이에요. 대출 한도는 최대 10억 원이에요.",
       "requires": [
-        {"label": "본인 만 40세 이상", "cond": {"field": "age_self", "op": ">=", "value": 40}},
-        {"label": "만 55세 이상 (55세 미만은 실직·폐업 증빙)", "cond": {"field": "age_self", "op": ">=", "value": 55},
-         "otherwise": [{"if": [{"field": "job", "op": "in", "value": ["yes"]}], "result": "check",
-                        "label": "55세 미만이라 실직·폐업 증빙서류가 필요해요"}]},
-        {"label": "주거용 주택", "cond": {"field": "type", "op": "in", "value": ["apt", "house"]},
-         "check_values": ["off", "etc"], "check_label": "오피스텔·상가주택은 담보 가능 여부를 은행에 확인해야 해요"}],
-      "tips": [{"if": [{"field": "lump", "op": "in", "value": ["yes"]}],
-                "text": "의료비 등이 필요하면 월지급금의 10배 이내에서 특별인출을 할 수 있어요."}]
+        {
+          "label": "본인 만 40세 이상",
+          "cond": {
+            "field": "age_self",
+            "op": ">=",
+            "value": 40
+          }
+        },
+        {
+          "label": "만 55세 이상 (55세 미만은 실직·폐업 증빙)",
+          "cond": {
+            "field": "age_self",
+            "op": ">=",
+            "value": 55
+          },
+          "otherwise": [
+            {
+              "if": [
+                {
+                  "field": "job",
+                  "op": "in",
+                  "value": [
+                    "yes"
+                  ]
+                }
+              ],
+              "result": "check",
+              "label": "55세 미만이라 실직·폐업 증빙서류가 필요해요"
+            }
+          ]
+        },
+        {
+          "label": "주거용 주택",
+          "cond": {
+            "field": "type",
+            "op": "in",
+            "value": [
+              "apt",
+              "house"
+            ]
+          },
+          "check_values": [
+            "off",
+            "etc"
+          ],
+          "check_label": "오피스텔·상가주택은 담보 가능 여부를 은행에 확인해야 해요"
+        }
+      ],
+      "tips": [
+        {
+          "if": [
+            {
+              "field": "lump",
+              "op": "in",
+              "value": [
+                "yes"
+              ]
+            }
+          ],
+          "text": "의료비 등이 필요하면 월지급금의 10배 이내에서 특별인출을 할 수 있어요."
+        }
+      ],
+      "profile": {
+        "min_age": 40,
+        "age_basis": "본인",
+        "price_max_eok": null,
+        "price_min_eok": null,
+        "house_types": [
+          "아파트",
+          "단독·빌라"
+        ],
+        "residence": "언급없음",
+        "period_type": "확정기간",
+        "period_max_years": 30,
+        "limit_eok": 10,
+        "rate": "COFIX 6개월 변동금리",
+        "sale_status": "판매 중"
+      }
     },
     {
-      "id": "shinhan", "name": "신한 미래설계 크레바스 주택연금대출", "org": "신한은행", "pay": "term",
-      "sale_status": "확인 필요", "last_checked": "2026-10", "source": "https://bank.shinhan.com",
+      "id": "shinhan",
+      "name": "신한 미래설계 크레바스 주택연금대출",
+      "org": "신한은행",
+      "pay": "term",
+      "sale_status": "확인 필요",
+      "last_checked": "2026-10",
+      "source": "https://bank.shinhan.com",
       "summary": "1~30년 동안 매달 받는 은행 자체 상품이에요. 나이 제한이 없는 것으로 안내돼 있어요.",
       "requires": [
-        {"label": "주택 또는 주거용 오피스텔", "cond": {"field": "type", "op": "in", "value": ["apt", "house", "off"]},
-         "check_values": ["etc"], "check_label": "상가주택은 담보 가능 여부를 은행에 확인해야 해요"}]
+        {
+          "label": "주택 또는 주거용 오피스텔",
+          "cond": {
+            "field": "type",
+            "op": "in",
+            "value": [
+              "apt",
+              "house",
+              "off"
+            ]
+          },
+          "check_values": [
+            "etc"
+          ],
+          "check_label": "상가주택은 담보 가능 여부를 은행에 확인해야 해요"
+        }
+      ],
+      "profile": {
+        "min_age": null,
+        "age_basis": "언급없음",
+        "price_max_eok": null,
+        "price_min_eok": null,
+        "house_types": [
+          "아파트",
+          "단독·빌라",
+          "주거용 오피스텔"
+        ],
+        "residence": "언급없음",
+        "period_type": "확정기간",
+        "period_max_years": 30,
+        "limit_eok": null,
+        "rate": null,
+        "sale_status": "언급없음"
+      }
     },
     {
-      "id": "hana_bank", "name": "하나 역모기지론", "org": "하나은행", "pay": "term",
-      "sale_status": "확인 필요", "last_checked": "2026-10", "source": "https://www.kebhana.com",
+      "id": "hana_bank",
+      "name": "하나 역모기지론",
+      "org": "하나은행",
+      "pay": "term",
+      "sale_status": "확인 필요",
+      "last_checked": "2026-10",
+      "source": "https://www.kebhana.com",
       "summary": "공시가격 12억 원 초과 아파트를 위한 은행 자체 상품으로 2024년에 출시됐어요.",
       "requires": [
-        {"label": "공시가격 12억 원 초과", "cond": {"field": "price", "op": "in", "value": ["gt"]}},
-        {"label": "아파트", "cond": {"field": "type", "op": "in", "value": ["apt"]}}]
+        {
+          "label": "공시가격 12억 원 초과",
+          "cond": {
+            "field": "price",
+            "op": "in",
+            "value": [
+              "gt"
+            ]
+          }
+        },
+        {
+          "label": "아파트",
+          "cond": {
+            "field": "type",
+            "op": "in",
+            "value": [
+              "apt"
+            ]
+          }
+        }
+      ],
+      "profile": {
+        "min_age": null,
+        "age_basis": "언급없음",
+        "price_max_eok": null,
+        "price_min_eok": 12,
+        "house_types": [
+          "아파트"
+        ],
+        "residence": "언급없음",
+        "period_type": "확정기간",
+        "period_max_years": null,
+        "limit_eok": null,
+        "rate": null,
+        "sale_status": "언급없음"
+      }
     },
     {
-      "id": "hana_life", "name": "하나더넥스트 내집연금", "org": "하나생명 (하나은행에서 신청)", "pay": "life",
-      "sale_status": "판매 중", "last_checked": "2026-10",
+      "id": "hana_life",
+      "name": "하나더넥스트 내집연금",
+      "org": "하나생명 (하나은행에서 신청)",
+      "pay": "life",
+      "sale_status": "판매 중",
+      "last_checked": "2026-10",
       "source": "https://www.kebhana.com/cont/mall/mall08/mall0802/mall080202/1420301_115196.jsp",
       "summary": "공시가격 12억 원 초과 주택으로 평생 연금을 받는 민간 상품이에요. 대출 한도는 최대 15억 원이에요.",
       "requires": [
-        {"label": "나이가 적은 분이 만 55세 이상", "cond": {"field": "age_younger", "op": ">=", "value": 55}},
-        {"label": "공시가격 12억 원 초과", "cond": {"field": "price", "op": "in", "value": ["gt"]}},
-        {"label": "KB시세가 있는 주택", "cond": {"field": "type", "op": "in", "value": ["apt"]},
-         "check_values": ["house", "off"], "check_label": "KB시세가 있는 주택인지 확인해야 해요"},
-        {"label": "그 집에 실제로 거주", "cond": {"field": "live", "op": "in", "value": ["yes"]},
-         "check_values": ["tmp"], "check_label": "잠시 못 사는 경우 인정되는지 확인해야 해요"},
-        {"label": "2년 이상 보유", "cond": {"field": "own2", "op": "in", "value": ["yes"]}}]
+        {
+          "label": "나이가 적은 분이 만 55세 이상",
+          "cond": {
+            "field": "age_younger",
+            "op": ">=",
+            "value": 55
+          }
+        },
+        {
+          "label": "공시가격 12억 원 초과",
+          "cond": {
+            "field": "price",
+            "op": "in",
+            "value": [
+              "gt"
+            ]
+          }
+        },
+        {
+          "label": "KB시세가 있는 주택",
+          "cond": {
+            "field": "type",
+            "op": "in",
+            "value": [
+              "apt"
+            ]
+          },
+          "check_values": [
+            "house",
+            "off"
+          ],
+          "check_label": "KB시세가 있는 주택인지 확인해야 해요"
+        },
+        {
+          "label": "그 집에 실제로 거주",
+          "cond": {
+            "field": "live",
+            "op": "in",
+            "value": [
+              "yes"
+            ]
+          },
+          "check_values": [
+            "tmp"
+          ],
+          "check_label": "잠시 못 사는 경우 인정되는지 확인해야 해요"
+        },
+        {
+          "label": "2년 이상 보유",
+          "cond": {
+            "field": "own2",
+            "op": "in",
+            "value": [
+              "yes"
+            ]
+          }
+        }
+      ],
+      "profile": {
+        "min_age": 55,
+        "age_basis": "부부 중 연소자",
+        "price_max_eok": null,
+        "price_min_eok": 12,
+        "house_types": [
+          "아파트"
+        ],
+        "residence": "필수",
+        "period_type": "종신",
+        "period_max_years": null,
+        "limit_eok": 15,
+        "rate": "10년 만기 국고채 직전월 평균금리 + 1.3% 고정",
+        "sale_status": "판매 중"
+      }
     },
     {
-      "id": "nh", "name": "연금형 생활자금대출", "org": "지역 농·축협", "pay": "term",
-      "sale_status": "판매 중", "last_checked": "2026-10",
+      "id": "nh",
+      "name": "연금형 생활자금대출",
+      "org": "지역 농·축협",
+      "pay": "term",
+      "sale_status": "판매 중",
+      "last_checked": "2026-10",
       "source": "https://saegoseong.nonghyup.com/saegoseong/64019/subview.do",
       "summary": "55세 이상 농업인에게 최장 10년 동안 생활자금을 나눠 주는 상품이에요.",
       "requires": [
-        {"label": "본인 만 55세 이상", "cond": {"field": "age_self", "op": ">=", "value": 55}},
-        {"label": "농업인", "cond": {"field": "farm", "op": "in", "value": ["yes"]}}],
-      "tips": [{"if": [], "text": "조합마다 조건이 달라요. 가까운 농·축협에 꼭 확인하세요."}]
+        {
+          "label": "본인 만 55세 이상",
+          "cond": {
+            "field": "age_self",
+            "op": ">=",
+            "value": 55
+          }
+        },
+        {
+          "label": "농업인",
+          "cond": {
+            "field": "farm",
+            "op": "in",
+            "value": [
+              "yes"
+            ]
+          }
+        }
+      ],
+      "tips": [
+        {
+          "if": [],
+          "text": "조합마다 조건이 달라요. 가까운 농·축협에 꼭 확인하세요."
+        }
+      ],
+      "profile": {
+        "min_age": 55,
+        "age_basis": "본인",
+        "price_max_eok": null,
+        "price_min_eok": null,
+        "house_types": null,
+        "residence": "언급없음",
+        "period_type": "확정기간",
+        "period_max_years": 10,
+        "limit_eok": null,
+        "rate": null,
+        "sale_status": "판매 중"
+      }
     }
   ],
   "groups": {
     "hf_base": [
-      {"label": "부부 중 한 분이 만 55세 이상", "cond": {"field": "age_older", "op": ">=", "value": 55}},
-      {"label": "공시가격 합산 12억 원 이하", "cond": {"field": "price", "op": "in", "value": ["le"]},
-       "otherwise": [{"if": [{"field": "houses", "op": "in", "value": ["2"]}], "result": "check",
-                      "label": "12억 초과 2주택이면 3년 안에 1채를 처분하는 조건으로 가능해요"}]},
-      {"label": "주택 또는 주거용 오피스텔", "cond": {"field": "type", "op": "in", "value": ["apt", "house", "off"]},
-       "check_values": ["etc"], "check_label": "상가주택은 주택 면적이 절반 이상인지 확인해야 해요"},
-      {"label": "그 집에 실제로 거주", "cond": {"field": "live", "op": "in", "value": ["yes"]},
-       "check_values": ["tmp"], "check_label": "입원·요양 등 불가피한 사유는 HF 승인 시 예외로 인정돼요"}
+      {
+        "label": "부부 중 한 분이 만 55세 이상",
+        "cond": {
+          "field": "age_older",
+          "op": ">=",
+          "value": 55
+        }
+      },
+      {
+        "label": "공시가격 합산 12억 원 이하",
+        "cond": {
+          "field": "price",
+          "op": "in",
+          "value": [
+            "le"
+          ]
+        },
+        "otherwise": [
+          {
+            "if": [
+              {
+                "field": "houses",
+                "op": "in",
+                "value": [
+                  "2"
+                ]
+              }
+            ],
+            "result": "check",
+            "label": "12억 초과 2주택이면 3년 안에 1채를 처분하는 조건으로 가능해요"
+          }
+        ]
+      },
+      {
+        "label": "주택 또는 주거용 오피스텔",
+        "cond": {
+          "field": "type",
+          "op": "in",
+          "value": [
+            "apt",
+            "house",
+            "off"
+          ]
+        },
+        "check_values": [
+          "etc"
+        ],
+        "check_label": "상가주택은 주택 면적이 절반 이상인지 확인해야 해요"
+      },
+      {
+        "label": "그 집에 실제로 거주",
+        "cond": {
+          "field": "live",
+          "op": "in",
+          "value": [
+            "yes"
+          ]
+        },
+        "check_values": [
+          "tmp"
+        ],
+        "check_label": "입원·요양 등 불가피한 사유는 HF 승인 시 예외로 인정돼요"
+      }
     ]
-  }
+  },
+  "_profile_설명": "profile은 AI 상품설명서 분석기가 문서에서 뽑은 값과 비교하는 기준값이다. null은 조사 자료에 없음."
 }

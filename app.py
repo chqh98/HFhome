@@ -2,9 +2,13 @@
 
 실행:  streamlit run app.py
 """
+import hashlib
+
 import streamlit as st
 
+import ai_tools as A
 import engine as E
+import llm
 
 st.set_page_config(page_title="우리 집 연금 찾기", page_icon="🏠", layout="centered")
 
@@ -30,7 +34,6 @@ div[data-testid="stNumberInput"] label p { font-size: 1.1rem; }
 )
 
 Q = E.load_questions()
-P = E.load_products()
 QMAP = {q["id"]: q for q in Q}
 
 PRESETS = {
@@ -55,6 +58,45 @@ ss.setdefault("answers", {})
 ss.setdefault("cur", "intro")  # intro | 질문 id | result
 ss.setdefault("guide", None)  # '잘 모르겠어요' 안내를 펼친 질문 id
 ss.setdefault("age_error", "")
+# 상품 DB는 세션 사본을 쓴다. 관리자가 승인한 변경이 이 사본에 반영돼 바로 추천 결과에 적용된다.
+ss.setdefault("products", E.load_products())
+ss.setdefault("audit", [])          # 승인 기록
+ss.setdefault("helper", {})         # 용어 도우미 답변 (화면별)
+ss.setdefault("helper_cache", {})   # 같은 질문 재호출 방지
+P = ss.products
+G = A.load_glossary()
+
+
+# ---------- AI 연결 ----------
+def _secret(name, default=""):
+    try:
+        return st.secrets.get(name, default)
+    except Exception:  # secrets 파일이 없을 때
+        return default
+
+
+def ai_config():
+    """Secrets 설정을 우선 쓰고, 없으면 관리자 화면에서 이 세션에만 입력한 키를 쓴다."""
+    if _secret("LLM_API_KEY"):
+        return _secret("LLM_PROVIDER", "gemini"), _secret("LLM_API_KEY"), _secret("LLM_MODEL") or None
+    return ss.get("ui_provider", "gemini"), ss.get("ui_api_key", ""), ss.get("ui_model") or None
+
+
+def save_ai_settings():
+    # 위젯 값은 다른 화면으로 가면 지워지므로 별도 키에 옮겨 둔다
+    ss.ui_provider = ss.get("w_provider", "gemini")
+    ss.ui_api_key = (ss.get("w_api_key") or "").strip()
+    ss.ui_model = (ss.get("w_model") or "").strip()
+
+
+def get_llm():
+    provider, key, model = ai_config()
+    if not key:
+        return None
+
+    def call(system, user, want_json=False):
+        return llm.chat(system, user, provider=provider, api_key=key, model=model, want_json=want_json)
+    return call
 
 
 def visible_ids():
@@ -193,6 +235,47 @@ def page_choice(q):
     st.button("← 이전", key=f"back_{q['id']}", on_click=go_back)
 
 
+# ---------- 용어 설명 도우미 ----------
+QUICK_QUESTIONS = ["종신방식과 확정기간 방식은 뭐가 달라요?", "공시가격이랑 시세는 뭐가 달라요?",
+                   "보증료는 언제 내요?", "나중에 자식한테 빚이 넘어가나요?"]
+
+
+def ask_helper(slot, question, summary):
+    question = (question or "").strip()
+    if not question:
+        return
+    ck = hashlib.md5(f"{question}|{summary}|{ai_config()[0]}".encode()).hexdigest()
+    if ck not in ss.helper_cache:
+        ss.helper_cache[ck] = A.explain(question, G, P, get_llm(), summary)
+    ss.helper[slot] = {"q": question, **ss.helper_cache[ck]}
+
+
+def helper_box(slot, summary=""):
+    st.markdown("#### 모르는 말이 있으세요?")
+    st.caption("주택연금 용어를 쉬운 말로 풀어드려요. 아래를 누르거나 직접 물어보세요.")
+    for i, qq in enumerate(QUICK_QUESTIONS):
+        st.button(qq, key=f"{slot}_quick_{i}", on_click=ask_helper, args=(slot, qq, summary))
+    st.text_input("직접 물어보기", key=f"{slot}_input", placeholder="예: 대출상환방식이 뭐예요?")
+    st.button("물어보기", key=f"{slot}_ask", type="primary",
+              on_click=lambda: ask_helper(slot, ss.get(f"{slot}_input", ""), summary))
+    a = ss.helper.get(slot)
+    if a:
+        with st.container(border=True):
+            st.markdown(f"**Q. {a['q']}**")
+            st.markdown(a["text"])
+            src = {"ai": "AI 답변 · 용어집과 상품 DB에 있는 내용만 근거로 답해요",
+                   "glossary": "용어집 검색 결과", "none": ""}[a["source"]]
+            if src:
+                st.caption(src)
+            if a.get("note"):
+                st.caption(a["note"])
+
+
+def result_summary(res):
+    return " / ".join(f"{E.STATUS_LABEL[k]}: " + (", ".join(v.product["name"] for v in res[k]) or "없음")
+                      for k in (E.OK, E.CHECK, E.NO))
+
+
 # ---------- 화면: 결과 ----------
 BADGE = {E.OK: ("b-ok", "가입할 수 있어요"), E.CHECK: ("b-check", "확인이 필요해요"), E.NO: ("b-no", "해당되지 않아요")}
 
@@ -235,6 +318,10 @@ def page_result():
             for v in res[E.NO]:
                 product_card(v)
 
+    st.divider()
+    helper_box("result", result_summary(res))
+    st.divider()
+
     with st.expander("내가 고른 답 다시 보기"):
         for q in E.visible_questions(Q, ss.answers):
             if q["id"] == "age":
@@ -255,8 +342,18 @@ def page_result():
 # ---------- 화면: 관리자 ----------
 def page_admin():
     st.title("상품 DB · 관리자 화면")
-    st.markdown("추천은 `data/products.json`의 조건으로만 판정돼요. 변경감지에서 조건이 바뀌면 "
-                "이 파일만 고치면 되고, 화면 코드는 건드리지 않아요.")
+    st.markdown("추천은 상품 DB의 조건(Rule)으로만 판정해요. AI는 판정하지 않고, "
+                "상품설명서에서 조건을 뽑아 **사람이 승인할 후보**를 만드는 일만 해요.")
+    t1, t2, t3 = st.tabs(["상품 DB", "AI 상품설명서 분석기", "변경 이력"])
+    with t1:
+        tab_db()
+    with t2:
+        tab_analyzer()
+    with t3:
+        tab_audit()
+
+
+def tab_db():
     st.subheader("상품 목록")
     st.dataframe(
         [{"상품": p["name"], "기관": p["org"], "지급": "평생" if p["pay"] == "life" else "기간",
@@ -265,7 +362,6 @@ def page_admin():
         use_container_width=True, hide_index=True,
         column_config={"출처": st.column_config.LinkColumn("출처")},
     )
-
     st.subheader("질문 변경 영향도")
     st.markdown("상품 조건이 바뀌면 아래 표로 영향받는 질문과 상품을 바로 찾을 수 있어요.")
     usage = E.field_usage(P)
@@ -276,7 +372,6 @@ def page_admin():
         rows.append({"질문": q["no"], "내용": q["text"],
                      "판정에 쓰는 상품": ", ".join(names) if names else "(결과 순서·안내에만 사용)"})
     st.dataframe(rows, use_container_width=True, hide_index=True)
-
     st.subheader("상품별 조건")
     for p in P:
         with st.expander(p["name"]):
@@ -285,9 +380,174 @@ def page_admin():
                 st.markdown(f"- **{r['label']}** — `{c['field']} {c['op']} {c['value']}`")
 
 
+SAMPLES = {
+    "하나생명 상품설명서 (가입연령 변경 시연)": ("hana_life", "hana_life_demo.txt"),
+    "신한은행 판매 종료 공지 (판매 중단 시연)": ("shinhan", "shinhan_notice_demo.txt"),
+}
+
+
+def load_sample(name):
+    pid, fname = SAMPLES[name]
+    ss.doc_text = (A.DATA / "samples" / fname).read_text(encoding="utf-8")
+    ss.an_pid = pid
+    ss.an_error = ""
+    ss.pop("analysis", None)
+
+
+def load_upload():
+    f = ss.get("doc_file")
+    if f is None:
+        return
+    data = f.getvalue()
+    if f.name.lower().endswith(".pdf"):
+        try:
+            import io
+            from pypdf import PdfReader
+            ss.doc_text = "\n".join((pg.extract_text() or "") for pg in PdfReader(io.BytesIO(data)).pages)
+        except Exception as e:  # pypdf 미설치 또는 스캔본
+            ss.doc_text = ""
+            ss.an_error = f"PDF에서 글자를 읽지 못했어요 ({e}). 텍스트를 복사해 붙여넣어 주세요."
+            return
+    else:
+        for enc in ("utf-8", "cp949"):
+            try:
+                ss.doc_text = data.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+    ss.pop("analysis", None)
+
+
+def run_analysis():
+    ss.an_error = ""
+    text = (ss.get("doc_text") or "").strip()
+    if len(text) < 30:
+        ss.an_error = "분석할 문서 내용을 넣어주세요."
+        return
+    call = get_llm()
+    if call is None:
+        ss.an_error = "AI API 키가 없어요. 아래 'AI 연결 설정'에서 키를 넣거나 Secrets를 설정해 주세요."
+        return
+    try:
+        ex = A.extract(text, call)
+    except Exception as e:
+        ss.an_error = f"AI 분석에 실패했어요: {e}"
+        return
+    prod = next(p for p in P if p["id"] == ss.an_pid)
+    ss.analysis = {"pid": ss.an_pid, "ex": ex, "rows": A.compare(prod.get("profile", {}), ex)}
+
+
+def approve_selected():
+    a = ss.get("analysis")
+    if not a:
+        return
+    picked = [r for r in a["rows"] if ss.get(f"ok_{a['pid']}_{r['key']}")]
+    if not picked:
+        ss.an_error = "승인할 항목을 하나 이상 체크해 주세요."
+        return
+    for r in picked:
+        ss.products, log = A.apply_change(ss.products, a["pid"], r["key"], r["_new"], ss.get("approver", ""))
+        ss.audit.append(log)
+    ss.approved_msg = f"{len(picked)}개 항목을 반영했어요. 추천 결과에 바로 적용돼요. '변경 이력' 탭에서 확인할 수 있어요."
+    ss.pop("analysis", None)
+
+
+def tab_analyzer():
+    st.markdown("금융회사의 상품설명서나 공지를 넣으면 AI가 핵심 조건을 뽑아 **현재 DB와 비교**해요. "
+                "바뀐 항목은 근거 문장과 함께 보여주고, **관리자가 체크해서 승인한 항목만** 반영돼요.")
+    provider, key, model = ai_config()
+    if key:
+        st.success(f"AI 연결됨: {provider} · {model or llm.DEFAULT_MODELS.get(provider, '')}")
+    else:
+        st.warning("AI API 키가 없어요. 아래 'AI 연결 설정'을 열어 키를 넣어주세요.")
+    with st.expander("AI 연결 설정"):
+        st.caption("배포할 때는 Streamlit Secrets에 넣는 걸 권장해요(README 참고). 여기 넣은 키는 지금 접속한 화면에서만 쓰여요.")
+        for w, saved, default in (("w_provider", "ui_provider", "gemini"), ("w_api_key", "ui_api_key", ""),
+                                  ("w_model", "ui_model", "")):
+            if w not in ss:
+                ss[w] = ss.get(saved, default)
+        st.selectbox("AI 서비스", ["gemini", "openai", "anthropic"], key="w_provider", on_change=save_ai_settings)
+        st.text_input("API 키", type="password", key="w_api_key", on_change=save_ai_settings)
+        st.text_input("모델 이름 (비우면 기본값)", key="w_model", on_change=save_ai_settings,
+                      placeholder=", ".join(f"{k}: {v}" for k, v in llm.DEFAULT_MODELS.items()))
+
+    if ss.get("approved_msg"):
+        st.success(ss.pop("approved_msg"))
+
+    st.markdown("##### 1. 비교할 상품")
+    names = {p["id"]: p["name"] for p in P}
+    ss.setdefault("an_pid", "hana_life")
+    st.selectbox("상품", list(names), format_func=names.get, key="an_pid", label_visibility="collapsed")
+
+    st.markdown("##### 2. 문서 넣기")
+    st.caption("시연용 예시 문서 (실제 조건이 아닌 가상 문서예요)")
+    for name in SAMPLES:
+        st.button(name, key=f"sample_{name}", on_click=load_sample, args=(name,))
+    st.file_uploader("파일 올리기 (txt, pdf)", type=["txt", "pdf"], key="doc_file", on_change=load_upload)
+    st.text_area("또는 문서 내용을 붙여넣기", key="doc_text", height=220)
+
+    st.button("AI로 분석하기", type="primary", on_click=run_analysis)
+    if ss.get("an_error"):
+        st.error(ss.an_error)
+
+    a = ss.get("analysis")
+    if not a:
+        return
+    ex, rows = a["ex"], a["rows"]
+    st.markdown("##### 3. 분석 결과")
+    if ex.get("product_name"):
+        st.caption(f"AI가 읽은 상품명: {ex['product_name']}")
+        if names[a["pid"]].replace(" ", "")[:4] not in ex["product_name"].replace(" ", ""):
+            st.warning("문서의 상품명이 선택한 상품과 달라 보여요. 비교할 상품이 맞는지 확인하세요.")
+    if ex.get("notes"):
+        st.info(f"AI 메모: {ex['notes']}")
+    cnt = {s: sum(r["상태"] == s for r in rows) for s in ("변경", "새로 확인", "같음", "문서에 없음")}
+    st.markdown(" · ".join(f"**{k}** {v}개" for k, v in cnt.items()))
+    st.dataframe([{k: r[k] for k in ("항목", "현재 DB", "AI 추출", "상태", "근거 문장", "주의")} for r in rows],
+                 use_container_width=True, hide_index=True)
+
+    cands = [r for r in rows if r["상태"] in ("변경", "새로 확인")]
+    st.markdown("##### 4. 검토하고 승인하기")
+    if not cands:
+        st.success("DB와 다른 항목이 없어요. 반영할 내용이 없습니다.")
+        return
+    st.caption("근거 문장을 원문과 대조한 뒤, 맞는 항목만 체크하세요. 주의 표시가 있는 항목은 특히 꼼꼼히 확인하세요.")
+    for r in cands:
+        with st.container(border=True):
+            st.checkbox(f"[{r['상태']}] {r['항목']}: {r['현재 DB']} → {r['AI 추출']}", key=f"ok_{a['pid']}_{r['key']}")
+            if r["근거 문장"]:
+                st.markdown(f"> {r['근거 문장']}")
+            if r["주의"]:
+                st.warning(f"주의: {r['주의']}")
+            st.caption(f"영향 질문: {r['영향 질문']} · 영향 범위: {r['영향 범위']}")
+    st.text_input("승인자 이름", key="approver", placeholder="예: 관리자 홍길동")
+    st.button("체크한 항목 승인하고 반영", type="primary", on_click=approve_selected)
+
+
+def reset_db():
+    ss.products, ss.audit = E.load_products(), []
+    ss.pop("analysis", None)
+
+
+def tab_audit():
+    st.markdown("누가 언제 어떤 변경을 승인했는지 기록해요. 질문이나 선택지까지 바꿔야 하는 변경은 '후속 조치'에 표시돼요.")
+    if not ss.audit:
+        st.info("아직 승인된 변경이 없어요. 'AI 상품설명서 분석기' 탭에서 시연용 문서로 해보세요.")
+    else:
+        st.dataframe(ss.audit, use_container_width=True, hide_index=True)
+        need = [x for x in ss.audit if x["후속 조치"].startswith("질문 수정 필요")]
+        if need:
+            st.warning("질문 수정이 필요한 변경이 있어요: " + ", ".join(f"{x['상품']} {x['항목']}" for x in need))
+    st.markdown("이 화면의 변경은 지금 접속한 화면에만 적용돼요. 영구 반영하려면 아래 파일을 내려받아 "
+                "저장소의 `data/products.json`을 바꾸세요.")
+    st.download_button("승인 반영된 products.json 내려받기", A.export_products_json(ss.products),
+                       file_name="products.json", mime="application/json")
+    st.button("DB를 처음 상태로 되돌리기", on_click=reset_db)
+
+
 # ---------- 사이드바 ----------
 with st.sidebar:
-    mode = st.radio("화면", ["추천받기", "상품 DB (관리자)"])
+    mode = st.radio("화면", ["추천받기", "용어 물어보기", "상품 DB (관리자)"])
     st.divider()
     st.markdown("**발표용 예시 인물**")
     st.caption("누르면 답이 채워지고 결과로 바로 이동해요.")
@@ -296,6 +556,10 @@ with st.sidebar:
 
 if mode == "상품 DB (관리자)":
     page_admin()
+elif mode == "용어 물어보기":
+    st.title("용어 물어보기")
+    helper_box("page")
+    st.caption(DISCLAIMER)
 elif ss.cur == "intro":
     page_intro()
 elif ss.cur == "result":
