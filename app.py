@@ -37,14 +37,14 @@ Q = E.load_questions()
 QMAP = {q["id"]: q for q in Q}
 
 PRESETS = {
-    "62세 부부 · 아파트 5억 · 대출 있음": dict(age_self=62, age_spouse=59, houses="1", price="le", type="apt", live="yes",
+    "62세 부부 · 아파트 5억 · 대출 있음": dict(age_self=62, age_spouse=59, houses="1", price="le", market_price=7.0, type="apt", live="yes",
                                      farm="no", basic="no", loan="yes", period="life", lump="no"),
     "51세 조기퇴직 · 공시 9억": dict(age_self=51, age_spouse=50, houses="1", price="le", type="apt", live="yes",
                                job="yes", loan="no", period="term", lump="no"),
     "68세 부부 · 공시 15억 아파트": dict(age_self=68, age_spouse=64, houses="1", price="gt", type="apt", live="yes",
                                   farm="no", own2="yes", loan="no", period="life", lump="yes"),
-    "71세 농업인 · 시골 단독주택": dict(age_self=71, age_spouse=None, houses="1", price="le", type="house", live="yes",
-                                 farm="yes", basic="yes", cheap="yes", loan="no", period="life", lump="no"),
+    "71세 농업인 · 시골 단독주택": dict(age_self=71, age_spouse=None, houses="1", price="le", market_price=1.8, type="house", live="yes",
+                                 farm="yes", basic="yes", loan="no", period="life", lump="no"),
 }
 
 DISCLAIMER = (
@@ -58,6 +58,7 @@ ss.setdefault("answers", {})
 ss.setdefault("cur", "intro")  # intro | 질문 id | result
 ss.setdefault("guide", None)  # '잘 모르겠어요' 안내를 펼친 질문 id
 ss.setdefault("age_error", "")
+ss.setdefault("num_error", "")
 # 상품 DB는 세션 사본을 쓴다. 관리자가 승인한 변경이 이 사본에 반영돼 바로 추천 결과에 적용된다.
 ss.setdefault("products", E.load_products())
 ss.setdefault("audit", [])          # 승인 기록
@@ -141,19 +142,29 @@ def submit_age():
     go_next("age")
 
 
+def submit_number(qid):
+    q = QMAP[qid]
+    v = ss.get(f"in_{qid}")
+    if v is None or not q.get("min", 0) <= v <= q.get("max", 1e9):
+        ss.num_error = f"{q.get('min', 0)}~{q.get('max')} 사이 숫자로 적어주세요."
+        return
+    ss.num_error = ""
+    answer(qid, round(float(v), 2))
+
+
 def toggle_guide(qid):
     ss.guide = None if ss.guide == qid else qid
 
 
 def restart():
     ss.answers, ss.cur, ss.guide = {}, "intro", None
-    for k in ("in_age_self", "in_age_spouse"):
+    for k in ("in_age_self", "in_age_spouse", "in_market_price"):
         ss.pop(k, None)
 
 
 def load_preset(name):
     ss.answers = E.clean_answers(Q, dict(PRESETS[name]))
-    for k in ("in_age_self", "in_age_spouse"):
+    for k in ("in_age_self", "in_age_spouse", "in_market_price"):
         ss.pop(k, None)
     ss.cur, ss.guide = "result", None
 
@@ -161,6 +172,8 @@ def load_preset(name):
 def answer_label(qid, value):
     if value == E.UNKNOWN:
         return "잘 모르겠어요 (확인 필요)"
+    if QMAP[qid]["type"] == "number":
+        return f"{value:g} {QMAP[qid].get('unit', '')}"
     return dict(QMAP[qid].get("options", [])).get(value, str(value))
 
 
@@ -218,6 +231,29 @@ def page_choice(q):
         picked = current == value
         st.button(("✓ " if picked else "") + label, key=f"opt_{q['id']}_{value}",
                   type="primary" if picked else "secondary", on_click=answer, args=(q["id"], value))
+    unknown_box(q)
+    st.button("← 이전", key=f"back_{q['id']}", on_click=go_back)
+
+
+def page_number(q):
+    progress_bar(q["id"])
+    st.markdown(f'<div class="qno">{q["no"]}</div><div class="qtext">{q["text"]}</div>', unsafe_allow_html=True)
+    if q.get("help"):
+        st.caption(q["help"])
+    key = f"in_{q['id']}"
+    if key not in ss:
+        cur = ss.answers.get(q["id"])
+        ss[key] = cur if isinstance(cur, (int, float)) else None
+    st.number_input(f"{q.get('unit', '')} 단위로 적어주세요", min_value=0.0, max_value=float(q.get("max", 100)),
+                    step=float(q.get("step", 0.1)), format="%.1f", key=key, placeholder="예: 4.5")
+    if ss.get("num_error"):
+        st.error(ss.num_error)
+    st.button("다음", type="primary", key=f"next_{q['id']}", on_click=submit_number, args=(q["id"],))
+    unknown_box(q)
+    st.button("← 이전", key=f"back_{q['id']}", on_click=go_back)
+
+
+def unknown_box(q):
     if q.get("allow_unknown", True):
         st.button("잘 모르겠어요", key=f"unk_{q['id']}", on_click=toggle_guide, args=(q["id"],))
         if ss.guide == q["id"]:
@@ -232,7 +268,6 @@ def page_choice(q):
                             unsafe_allow_html=True)
                 st.button("확인하지 못했어요. 일단 넘어갈게요", key=f"skip_{q['id']}",
                           on_click=answer, args=(q["id"], E.UNKNOWN))
-    st.button("← 이전", key=f"back_{q['id']}", on_click=go_back)
 
 
 # ---------- 용어 설명 도우미 ----------
@@ -280,7 +315,33 @@ def result_summary(res):
 BADGE = {E.OK: ("b-ok", "가입할 수 있어요"), E.CHECK: ("b-check", "확인이 필요해요"), E.NO: ("b-no", "해당되지 않아요")}
 
 
-def product_card(v):
+PAY_TABLE = E.load_payment_table()
+
+
+def hf_estimate():
+    vals = E.derive(ss.answers)
+    return E.estimate_hf_monthly(vals.get("age_younger"), ss.answers.get("market_price"), PAY_TABLE)
+
+
+def estimate_lines(pid, est):
+    """상품 카드에 붙일 예상 금액 안내. HF 예시표가 있는 종신 정액형만 금액을 계산한다."""
+    if not pid.startswith("hf_"):
+        return None, None
+    if est is None:
+        return None, "Q3-1에서 집 시세를 입력하면 예상 월지급금을 계산해 드려요."
+    base = f"{est['amount']:,.1f}만 원"
+    if pid == "hf_life":
+        return f"예상 월지급금 약 **{base}** (종신 정액형)", None
+    if pid == "hf_pref":
+        return None, f"일반 종신방식(약 {base})보다 매달 더 받아요. 정확한 금액은 HF에서 확인하세요."
+    if pid == "hf_term":
+        return None, f"종신방식(약 {base})보다 매달 더 받지만, 정한 기간이 끝나면 지급이 멈춰요."
+    if pid == "hf_loan":
+        return None, f"대출을 갚는 데 쓴 만큼 종신방식(약 {base})보다 매달 받는 돈이 줄어요."
+    return None, None
+
+
+def product_card(v, est=None):
     p = v.product
     with st.container(border=True):
         tags = f'<span class="badge {BADGE[v.status][0]}">{BADGE[v.status][1]}</span>'
@@ -290,6 +351,14 @@ def product_card(v):
         st.markdown(f"### {p['name']}")
         st.markdown(f'<span class="small">{p["org"]} · 정보 확인 {p["last_checked"]}</span>', unsafe_allow_html=True)
         st.markdown(p.get("summary", ""))
+        if v.status != E.NO:
+            big, small = estimate_lines(p["id"], est)
+            if big:
+                st.markdown(f"#### {big}")
+                st.caption(f"HF {est['date']} 월지급금 예시표 기준 추정 · 나이가 적은 분 {est['age']}세 · 시세 {est['price']:g}억 원"
+                           + ("".join(f" · {n}" for n in est["notes"])))
+            if small:
+                st.caption(small)
         title = {"ok": "이런 조건이 맞아요", "check": "이 부분을 확인해 주세요", "no": "이런 이유로 어려워요"}[v.status]
         st.markdown(f"**{title}**\n" + "\n".join(f"- {r}" for r in v.reasons))
         for t in v.tips:
@@ -311,15 +380,28 @@ def page_result():
         st.caption("원하시는 방식(" + ("평생 받기" if pref == "life" else "정해진 기간 동안 받기")
                    + ")에 맞는 상품을 먼저 보여드려요.")
 
+    est = hf_estimate()
+    hf_ok = any(v.product["id"] == "hf_life" for v in res[E.OK] + res[E.CHECK])
+    if est and hf_ok:
+        with st.container(border=True):
+            st.markdown("**HF 주택연금(종신 정액형)으로 받으면 매달**")
+            st.markdown(f"## 약 {est['amount']:,.1f}만 원")
+            st.caption(f"HF {est['date']} 월지급금 예시표 기준 추정이에요. 실제 금액은 HF의 주택 가격 평가와 "
+                       "가입 시점 기준에 따라 달라져요.")
+            st.link_button("HF에서 정확한 예상 연금 조회하기 ↗", "https://www.hf.go.kr")
+
     for v in res[E.OK] + res[E.CHECK]:
-        product_card(v)
+        product_card(v, est)
     if res[E.NO]:
         with st.expander(f"해당되지 않는 상품 {len(res[E.NO])}개와 그 이유"):
             for v in res[E.NO]:
-                product_card(v)
+                product_card(v, est)
 
     st.divider()
-    helper_box("result", result_summary(res))
+    summ = result_summary(res)
+    if est and hf_ok:
+        summ += f" / HF 종신 정액형 예상 월지급금: 약 {est['amount']:.1f}만 원 (HF {est['date']} 예시표 기준 추정)"
+    helper_box("result", summ)
     st.divider()
 
     with st.expander("내가 고른 답 다시 보기"):
@@ -571,5 +653,7 @@ else:
         st.rerun()
     elif q["type"] == "age":
         page_age(q)
+    elif q["type"] == "number":
+        page_number(q)
     else:
         page_choice(q)
