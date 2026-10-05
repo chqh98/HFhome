@@ -177,7 +177,7 @@ def page_choice(q):
         st.button(("✓ " if picked else "") + label, key=f"opt_{q['id']}_{value}",
                   type="primary" if picked else "secondary", on_click=answer, args=(q["id"], value))
     if q.get("allow_unknown", True):
-        st.button("? 잘 모르겠어요", key=f"unk_{q['id']}", on_click=toggle_guide, args=(q["id"],))
+        st.button("잘 모르겠어요", key=f"unk_{q['id']}", on_click=toggle_guide, args=(q["id"],))
         if ss.guide == q["id"]:
             g = q.get("guide", {})
             with st.container(border=True):
