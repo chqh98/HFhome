@@ -38,7 +38,7 @@ Secrets 없이도 **관리자 화면 → AI 상품설명서 분석기 → AI 연
 |---|---|
 | 추천받기 | 질문 1개씩 큰 글씨로 → 상품별 판정과 이유 → **모르는 말 물어보기(용어 도우미)** |
 | 용어 물어보기 | 용어 도우미만 따로 쓰는 화면 |
-| 상품 DB (관리자) | 상품 DB · 질문 변경 영향도 / **AI 상품설명서 분석기** / **변경 이력** |
+| 상품 DB (관리자) | **변경 알림함** / 상품 DB · 질문 변경 영향도 / **감시 대상** / **AI 상품설명서 분석기** / **변경 이력** |
 | 사이드바 | 발표용 예시 인물 4명 (누르면 결과로 바로 이동) |
 
 ## 3. AI 기능
@@ -95,6 +95,36 @@ Secrets 없이도 **관리자 화면 → AI 상품설명서 분석기 → AI 연
   - Secrets에 `APP_URL = "https://내앱.streamlit.app"`을 넣으면 완성된 링크가 만들어집니다.
 - 계산 코드는 `engine.py`의 `simulate_inheritance`, 공유·리포트는 `family.py`
 
+## 4-2. 상품 조건 변경 자동 감시 (AI 업무 자동화)
+
+**흐름**: 공식 상품 URL 수집 → 본문 텍스트 추출 → 이전 지문과 비교(같으면 종료, AI 호출 없음) → AI가 핵심 항목 추출 → 기존 DB와 비교 → 변경 발견 시 AI 변경 요약 → **관리자 알림** → 앱 '변경 알림함'에서 승인 → DB 반영
+
+| 구성 | 파일 |
+|---|---|
+| 감시 대상 9곳 (팀 조사 시트) | `data/sources.json` |
+| 수집·지문·변경 신호·비교·요약 | `monitor.py` |
+| 정기 실행 스크립트 | `scripts/run_monitor.py` |
+| 매일 자동 실행 + GitHub 이슈 알림 | `.github/workflows/monitor.yml` |
+| 승인 결과를 저장소에 바로 저장 (선택) | `gh_store.py` |
+
+**감시 규칙**
+- robots.txt가 막았거나 확인이 안 되는 사이트는 수집하지 않습니다 (시트의 '반자동' 대상은 관리자가 정기 확인).
+- 접속 시각처럼 매번 바뀌는 줄은 빼고 본문 지문을 만들어, 내용이 실제로 바뀌었을 때만 AI를 호출합니다.
+- 변경 신호: 준법감시인 **심의필 번호** 변경, **판매 종료·중단 문구**, 상품 페이지 **삭제(404)**.
+- 본문이 거의 비어 있으면(스크립트로 그리는 페이지) 오류로 보고합니다.
+- 금리·기타 탭은 '참고' 등급, 상품 조건 변경·판매 종료는 '중요' 등급으로 알립니다.
+
+**설정 방법 (GitHub Actions로 매일 자동 실행)**
+1. GitHub 저장소 → **Settings → Secrets and variables → Actions → New repository secret**에 `LLM_PROVIDER`, `LLM_API_KEY`를 넣습니다. (Streamlit Secrets와 같은 값)
+2. 저장소 → **Actions** 탭 → '상품 조건 변경 감시' → **Run workflow**로 한 번 실행해 봅니다. 이후 매일 08:47(한국시간)에 자동 실행됩니다.
+3. 변경이 발견되면 **GitHub 이슈**가 생기고, 저장소를 Watch 중인 팀원에게 메일로 알림이 갑니다. (선택) `NOTIFY_WEBHOOK_URL`에 슬랙·디스코드 웹훅 주소를 넣으면 메신저로도 옵니다.
+4. 알림은 `data/alerts.json`에 저장되고, Streamlit 앱 관리자 화면 **'변경 알림함'**에 '승인 대기'로 표시됩니다.
+5. (선택) Streamlit Secrets에 `GITHUB_TOKEN`(이 저장소 Contents 읽기/쓰기 권한 토큰)과 `GITHUB_REPO = "아이디/저장소"`를 넣으면, 앱에서 승인할 때 `products.json`이 저장소에 바로 커밋되어 영구 반영됩니다.
+
+**주의: 한국 금융사 사이트가 해외 서버 접속을 막을 수 있습니다.** GitHub Actions와 Streamlit Cloud는 해외 서버라, 수집이 실패하면 팀원 PC에서 `python scripts/run_monitor.py`를 실행하세요 (윈도우 작업 스케줄러로 매일 실행 가능). 결과 파일(`data/alerts.json`, `data/snapshots/`)을 저장소에 올리면 앱에 표시됩니다.
+
+**시연**: 관리자 화면 → 변경 알림함 → '시연용 변경 감지 실행'은 예시 문서를 '새로 수집된 페이지'로 넣어 같은 파이프라인을 돌립니다 (AI 키 필요).
+
 ## 5. 폴더 구조
 
 ```
@@ -108,6 +138,7 @@ jutaek-app/
 │   ├── products.json       상품 DB (판정 Rule + 비교용 profile)
 │   ├── questions.json      질문 DB
 │   ├── glossary.json       용어집
+│   ├── sources.json        조건 변경 감시 대상 9곳 (자동 감시 여부, 변경 신호)
 │   ├── hf_payment_table.json  HF 월지급금 예시표 (2026.3.1)
 │   └── samples/            시연용 가상 문서 2개
 ├── tests/
@@ -139,6 +170,7 @@ jutaek-app/
 python tests/test_engine.py
 python tests/test_ai_tools.py
 python tests/test_family.py
+python tests/test_monitor.py   # 내 컴퓨터에 가짜 상품 페이지를 띄워 감시 흐름 전체 검증
 ```
 
 > 이 서비스는 입력한 조건에 해당하는 상품 정보를 안내할 뿐, 특정 상품의 가입을 권유하지 않습니다.

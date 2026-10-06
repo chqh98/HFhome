@@ -20,7 +20,7 @@ PERSONAS = {
 EXPECT_OK = {
     "62세 부부 · 아파트 5억 · 대출 있음": {"hf_life", "hf_term", "hf_loan", "kb"},
     "51세 조기퇴직 · 공시 9억": set(),
-    "68세 부부 · 공시 15억 아파트": {"hana_life", "kb"},
+    "68세 부부 · 공시 15억 아파트": {"hana_life", "kb", "hana_bank"},
     "71세 농업인 · 시골 단독주택": {"hf_life", "hf_term", "hf_pref", "kb", "nh"},
 }
 

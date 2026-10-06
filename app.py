@@ -9,7 +9,9 @@ import streamlit as st
 import ai_tools as A
 import engine as E
 import family as F
+import gh_store
 import llm
+import monitor as M
 
 st.set_page_config(page_title="우리 집 연금 찾기", page_icon="🏠", layout="centered")
 
@@ -67,6 +69,8 @@ ss.setdefault("helper", {})         # 용어 도우미 답변 (화면별)
 ss.setdefault("helper_cache", {})   # 같은 질문 재호출 방지
 ss.setdefault("sim", dict(E.SIM_DEFAULTS))  # 상속 시뮬레이션 가정
 ss.setdefault("family_view", False)
+ss.setdefault("alerts", M.load_alerts())   # 변경 알림 (정기 감시 결과 + 앱에서 실행한 점검)
+ss.setdefault("monitor_log", [])
 P = ss.products
 G = A.load_glossary()
 
@@ -529,13 +533,139 @@ def page_admin():
     st.title("상품 DB · 관리자 화면")
     st.markdown("추천은 상품 DB의 조건(Rule)으로만 판정해요. AI는 판정하지 않고, "
                 "상품설명서에서 조건을 뽑아 **사람이 승인할 후보**를 만드는 일만 해요.")
-    t1, t2, t3 = st.tabs(["상품 DB", "AI 상품설명서 분석기", "변경 이력"])
+    pending = sum(a["status"] == "승인 대기" for a in ss.alerts)
+    t4, t1, t0, t2, t3 = st.tabs([f"변경 알림함 ({pending})", "상품 DB", "감시 대상", "AI 상품설명서 분석기", "변경 이력"])
+    with t4:
+        tab_alerts()
     with t1:
         tab_db()
+    with t0:
+        tab_sources()
     with t2:
         tab_analyzer()
     with t3:
         tab_audit()
+
+
+# ---------- 변경 알림함 ----------
+def run_monitor_now():
+    call = get_llm()
+    results = M.run_all(ss.products, call, persist=False)
+    for r in results:
+        if r.get("alert"):
+            ss.alerts.append(r["alert"])
+    ss.monitor_log = [f"[{r['status']}] {r['product']}: {r['message']}" for r in results]
+
+
+def inject_demo(name):
+    """시연용: 예시 문서를 '새로 수집된 페이지'로 넣어 전체 파이프라인을 돌린다."""
+    pid, fname = SAMPLES[name]
+    src = next((x for x in M.load_sources() if x.get("product_id") == pid),
+               {"id": f"demo-{pid}", "product": names_of(pid), "product_id": pid, "url": "(시연용 문서)", "priority": "중요"})
+    text = (A.DATA / "samples" / fname).read_text(encoding="utf-8")
+    call = get_llm()
+    if call is None:
+        ss.monitor_log = ["AI 키가 없어 시연할 수 없어요. Secrets에 LLM_API_KEY를 넣어주세요."]
+        return
+    r = M.check_source(src, ss.products, call, snapshot={"fingerprint": "이전-지문", "signals": {}}, text_override=text)
+    if r.get("alert"):
+        r["alert"]["summary"] = "[시연] " + r["alert"]["summary"]
+        ss.alerts.append(r["alert"])
+    ss.monitor_log = [f"[{r['status']}] {r['product']}: {r['message']}"]
+
+
+def names_of(pid):
+    return next((p["name"] for p in P if p["id"] == pid), pid)
+
+
+def decide_alert(aid, approve):
+    a = next(x for x in ss.alerts if x["id"] == aid)
+    if approve:
+        picked = [r for r in a["rows"] if ss.get(f"al_{aid}_{r['key']}", True)]
+        for r in picked:
+            ss.products, log = A.apply_change(ss.products, a["product_id"], r["key"], r["_new"], ss.get("approver_alert", ""))
+            log["출처"] = "변경 알림"
+            ss.audit.append(log)
+        a["status"] = "승인" if picked else "확인 완료"
+        a["decided"] = f"{ss.get('approver_alert') or '(이름 없음)'} · {len(picked)}개 항목 반영"
+    else:
+        a["status"] = "반려"
+        a["decided"] = f"{ss.get('approver_alert') or '(이름 없음)'} · 반려"
+    token, repo = _secret("GITHUB_TOKEN"), _secret("GITHUB_REPO")
+    if token and repo:
+        msgs = [gh_store.put_file(token, repo, "data/alerts.json", M.json.dumps(ss.alerts, ensure_ascii=False, indent=2),
+                                  f"변경 알림 {a['status']}: {a['product_name']}")]
+        if approve:
+            msgs.append(gh_store.put_file(token, repo, "data/products.json", A.export_products_json(ss.products),
+                                          f"상품 DB 반영: {a['product_name']}"))
+        ss.saved_msg = " / ".join(msgs)
+    else:
+        ss.saved_msg = "이 화면에만 반영됐어요. 영구 반영하려면 '변경 이력' 탭에서 products.json을 내려받거나 GitHub 연동을 설정하세요."
+
+
+def tab_alerts():
+    st.markdown("공식 상품 페이지를 정기적으로 읽어 **핵심 조건이 DB와 달라지면** 여기에 알림이 쌓여요. "
+                "AI가 바뀐 내용을 요약하고, 관리자가 근거를 확인해 승인하면 DB에 반영돼요.")
+    st.caption("흐름: 공식 URL 수집 → 본문 지문 비교(같으면 종료) → AI 핵심 항목 추출 → DB와 비교 → AI 변경 요약 → 승인 → DB 반영")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.button("지금 전체 점검 실행", on_click=run_monitor_now, type="primary")
+    with c2:
+        demo = st.selectbox("시연용 변경 넣기", list(SAMPLES), key="demo_pick", label_visibility="collapsed")
+        st.button("시연용 변경 감지 실행", on_click=inject_demo, args=(demo,))
+    if ss.monitor_log:
+        with st.expander("최근 점검 결과", expanded=True):
+            for line in ss.monitor_log:
+                st.markdown(f"- {line}")
+    if ss.get("saved_msg"):
+        st.info(ss.pop("saved_msg"))
+    st.text_input("승인자 이름", key="approver_alert", placeholder="예: 관리자 홍길동")
+
+    pend = [a for a in ss.alerts if a["status"] == "승인 대기"]
+    if not pend:
+        st.success("승인 대기 중인 알림이 없어요.")
+    for a in sorted(pend, key=lambda x: (x["level"] != "중요", x["created"])):
+        with st.container(border=True):
+            badge = "b-no" if a["level"] == "중요" else "b-check"
+            st.markdown(f'<span class="badge {badge}">{a["level"]}</span> <b>{a["product_name"]}</b> '
+                        f'<span class="small">· {a["created"]}</span>', unsafe_allow_html=True)
+            st.markdown(a["summary"])
+            for sgl in a.get("signals", []):
+                st.caption(f"변경 신호: {sgl}")
+            for r in a["rows"]:
+                st.checkbox(f"[{r['상태']}] {r['항목']}: {r['현재 DB']} → {r['AI 추출']}", value=True, key=f"al_{a['id']}_{r['key']}")
+                if r["근거 문장"]:
+                    st.markdown(f"> {r['근거 문장']}")
+                if r["주의"]:
+                    st.warning(f"주의: {r['주의']}")
+                st.caption(f"영향 질문: {r['영향 질문']} · 영향 범위: {r['영향 범위']}")
+            if a.get("url", "").startswith("http"):
+                st.link_button("원문 페이지 열기 ↗", a["url"])
+            b1, b2 = st.columns(2)
+            with b1:
+                st.button("체크한 항목 승인", key=f"ap_{a['id']}", type="primary", on_click=decide_alert, args=(a["id"], True))
+            with b2:
+                st.button("반려", key=f"rj_{a['id']}", on_click=decide_alert, args=(a["id"], False))
+    done = [a for a in ss.alerts if a["status"] != "승인 대기"]
+    if done:
+        with st.expander(f"처리된 알림 {len(done)}건"):
+            st.dataframe([{"시각": a["created"], "상품": a["product_name"], "등급": a["level"], "결과": a["status"],
+                           "처리": a.get("decided", ""), "요약": a["summary"]} for a in done],
+                         use_container_width=True, hide_index=True)
+
+
+def tab_sources():
+    import json as _json
+    data = _json.loads((A.DATA / "sources.json").read_text(encoding="utf-8"))["sources"]
+    auto = sum(x["auto"].startswith("가능") for x in data)
+    st.markdown(f"조건 변경을 감시할 공식 출처 **{len(data)}곳** 중 **{auto}곳은 자동 수집**, 나머지는 관리자가 정기적으로 확인해요. "
+                "수집을 막은 사이트(robots.txt)는 수집하지 않고 대체 출처를 쓰거나 사람이 확인해요.")
+    st.markdown("**변경 신호**는 페이지 전체가 아니라 '바뀌면 조건이 바뀌었을 가능성이 큰 지점'이에요. "
+                "예를 들어 준법감시인 심의필 번호가 바뀌면 상품설명서가 새로 나왔다는 뜻이라 분석기로 넘겨요.")
+    st.dataframe([{"기관": x["org"], "감시 대상": x["product"], "자동 감시": x["auto"], "변경 신호": x["signal"],
+                   "사유·메모": x["reason"], "감시 링크": x["watch_url"] or x["page_url"]} for x in data],
+                 use_container_width=True, hide_index=True,
+                 column_config={"감시 링크": st.column_config.LinkColumn("감시 링크")})
 
 
 def tab_db():
