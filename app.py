@@ -8,6 +8,7 @@ import streamlit as st
 
 import ai_tools as A
 import engine as E
+import family as F
 import llm
 
 st.set_page_config(page_title="우리 집 연금 찾기", page_icon="🏠", layout="centered")
@@ -64,8 +65,20 @@ ss.setdefault("products", E.load_products())
 ss.setdefault("audit", [])          # 승인 기록
 ss.setdefault("helper", {})         # 용어 도우미 답변 (화면별)
 ss.setdefault("helper_cache", {})   # 같은 질문 재호출 방지
+ss.setdefault("sim", dict(E.SIM_DEFAULTS))  # 상속 시뮬레이션 가정
+ss.setdefault("family_view", False)
 P = ss.products
 G = A.load_glossary()
+
+# 가족이 공유 링크(?r=...)로 들어오면 그 결과를 그대로 복원한다
+_code = st.query_params.get("r")
+if _code and ss.get("loaded_share") != _code:
+    _dec = F.decode_share(_code)
+    ss.loaded_share = _code
+    if _dec:
+        ss.answers = E.clean_answers(Q, _dec[0])
+        ss.sim.update(_dec[1])
+        ss.cur, ss.family_view = "result", True
 
 
 # ---------- AI 연결 ----------
@@ -157,7 +170,11 @@ def toggle_guide(qid):
 
 
 def restart():
-    ss.answers, ss.cur, ss.guide = {}, "intro", None
+    ss.answers, ss.cur, ss.guide, ss.family_view = {}, "intro", None, False
+    try:
+        st.query_params.clear()
+    except Exception:
+        pass
     for k in ("in_age_self", "in_age_spouse", "in_market_price"):
         ss.pop(k, None)
 
@@ -311,6 +328,84 @@ def result_summary(res):
                       for k in (E.OK, E.CHECK, E.NO))
 
 
+def answer_lines():
+    out = []
+    for q in E.visible_questions(Q, ss.answers):
+        if q["id"] == "age":
+            sp = ss.answers.get("age_spouse")
+            val = f"본인 {ss.answers.get('age_self')}세" + (f", 배우자 {sp}세" if sp else "")
+        else:
+            val = answer_label(q["id"], ss.answers.get(q["id"])) if q["id"] in ss.answers else "-"
+        out.append(f"{q['no']} {q['text']} → {val}")
+    return out
+
+
+# ---------- 상속 시뮬레이션 ----------
+def sim_rows(est):
+    s = ss.sim
+    return E.simulate_inheritance(est["age"], est["price"], est["amount"], house_growth=s["house_growth"],
+                                  rate=s["rate"], fee_initial=s["fee_initial"], fee_annual=s["fee_annual"])
+
+
+def set_sim(key, widget):
+    ss.sim[key] = float(ss[widget])
+
+
+def sim_section(est):
+    st.markdown("### 나중에 자녀에게 남는 금액은?")
+    st.caption("주택연금에 가입하지 않는 이유 1위는 '자녀에게 상속하려고'예요(HF 2022 실태조사, 54.4%). "
+               "가입했을 때와 안 했을 때 자녀에게 남는 금액을 직접 비교해 보세요.")
+    for widget, key, label, lo, hi, step in (("w_growth", "house_growth", "집값 상승률 (연 %)", 0.0, 4.0, 0.5),
+                                              ("w_rate", "rate", "주택연금 대출금리 (연 %)", 3.0, 6.0, 0.25)):
+        if widget not in ss:
+            ss[widget] = float(ss.sim[key])
+        st.slider(label, lo, hi, step=step, key=widget, on_change=set_sim, args=(key, widget))
+    rows = sim_rows(est)
+    try:
+        import pandas as pd
+        df = pd.DataFrame([{"년 뒤": r["year"], "주택연금 가입 시": r["inherit_joined"],
+                            "가입 안 함 (집 그대로)": r["inherit_not_joined"],
+                            "가입 안 함 + 자녀가 같은 생활비를 드린 경우": r["inherit_child_support"]}
+                           for r in rows if r["year"] <= 35]).set_index("년 뒤")
+        st.line_chart(df, y_label="자녀에게 남는 금액 (억 원)", x_label="가입 후 년수")
+    except ImportError:
+        pass
+    ins = E.sim_insight(rows)
+    at = ins["at"]
+    lines = []
+    for y in (10, 20):
+        r = at.get(y)
+        if r:
+            lines.append(f"- **{y}년 뒤({r['age']}세)**: 가입 시 약 **{r['inherit_joined']:.1f}억**, "
+                         f"가입 안 함 {r['inherit_not_joined']:.1f}억 "
+                         f"(그동안 받은 생활비 {r['paid']:.1f}억은 부모님이 자녀 도움 없이 마련)")
+    st.markdown("\n".join(lines))
+    if ins["cross_year"] is not None:
+        st.info(f"{ins['cross_year']}년 뒤({ins['cross_age']}세)부터는 갚을 돈이 집값보다 커져요. "
+                "그래도 HF 주택연금은 **비소구**라서 넘는 금액을 자녀에게 청구하지 않아요. "
+                "오래 사실수록 부모님께 유리한 구조예요.")
+    st.caption(f"가정: 집값 연 {ss.sim['house_growth']}% 상승 · 대출금리 연 {ss.sim['rate']}% · 초기보증료 "
+               f"{ss.sim['fee_initial']}% · 연보증료 {ss.sim['fee_annual']}%(2026.3.1 기준) · 이자는 월 복리. "
+               "참고용 계산이며 실제와 다를 수 있어요.")
+    return rows
+
+
+def share_section(res, est, rows):
+    st.markdown("### 가족과 함께 보기")
+    st.caption("주택연금은 가족이 함께 정하는 경우가 많아요. 이 결과를 자녀나 배우자에게 보내보세요. "
+               "이름·주소 같은 개인정보는 담기지 않아요.")
+    code = F.encode_share(ss.answers, ss.sim)
+    base = _secret("APP_URL", "").rstrip("/")
+    link = f"{base}/?r={code}" if base else f"?r={code}"
+    msg = F.message_text(link, est if any(v.product["id"] == "hf_life" for v in res[E.OK]) else None, len(res[E.OK]))
+    st.text_area("카카오톡·문자로 보낼 내용 (길게 눌러 복사하세요)", msg, height=170)
+    if not base:
+        st.caption("관리자: Secrets에 APP_URL(앱 주소)을 넣으면 완성된 링크가 만들어져요.")
+    report = F.build_report(ss.answers, res, est, rows, ss.sim, answer_lines())
+    st.download_button("가족 리포트 내려받기 (인쇄·공유용)", report, file_name="우리집연금_가족리포트.html",
+                       mime="text/html", type="primary")
+
+
 # ---------- 화면: 결과 ----------
 BADGE = {E.OK: ("b-ok", "가입할 수 있어요"), E.CHECK: ("b-check", "확인이 필요해요"), E.NO: ("b-no", "해당되지 않아요")}
 
@@ -369,6 +464,8 @@ def product_card(v, est=None):
 
 def page_result():
     res = E.recommend(P, ss.answers)
+    if ss.family_view:
+        st.info("가족이 보낸 주택연금 진단 결과예요. 아래 '나중에 자녀에게 남는 금액'을 함께 살펴보세요.")
     st.title("알아본 결과예요")
     n_ok, n_chk = len(res[E.OK]), len(res[E.CHECK])
     if n_ok:
@@ -389,6 +486,10 @@ def page_result():
             st.caption(f"HF {est['date']} 월지급금 예시표 기준 추정이에요. 실제 금액은 HF의 주택 가격 평가와 "
                        "가입 시점 기준에 따라 달라져요.")
             st.link_button("HF에서 정확한 예상 연금 조회하기 ↗", "https://www.hf.go.kr")
+    rows = None
+    if est and hf_ok:
+        with st.container(border=True):
+            rows = sim_section(est)
 
     for v in res[E.OK] + res[E.CHECK]:
         product_card(v, est)
@@ -398,20 +499,22 @@ def page_result():
                 product_card(v, est)
 
     st.divider()
+    share_section(res, est if hf_ok else None, rows)
+    st.divider()
     summ = result_summary(res)
     if est and hf_ok:
         summ += f" / HF 종신 정액형 예상 월지급금: 약 {est['amount']:.1f}만 원 (HF {est['date']} 예시표 기준 추정)"
+    if rows:
+        at = E.sim_insight(rows)["at"]
+        summ += " / 상속 시뮬레이션(가정: 집값 연 {g}%, 금리 연 {r}%): ".format(g=ss.sim["house_growth"], r=ss.sim["rate"])
+        summ += ", ".join(f"{y}년 뒤 가입 시 {x['inherit_joined']:.1f}억·미가입 시 {x['inherit_not_joined']:.1f}억"
+                          for y, x in at.items() if y in (10, 20))
     helper_box("result", summ)
     st.divider()
 
     with st.expander("내가 고른 답 다시 보기"):
-        for q in E.visible_questions(Q, ss.answers):
-            if q["id"] == "age":
-                sp = ss.answers.get("age_spouse")
-                val = f"본인 {ss.answers.get('age_self')}세" + (f", 배우자 {sp}세" if sp else "")
-            else:
-                val = answer_label(q["id"], ss.answers.get(q["id"])) if q["id"] in ss.answers else "-"
-            st.markdown(f"- **{q['no']}** {q['text']} → {val}")
+        for line in answer_lines():
+            st.markdown(f"- {line}")
 
     c1, c2 = st.columns(2)
     with c1:

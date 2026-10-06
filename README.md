@@ -84,6 +84,17 @@ Secrets 없이도 **관리자 화면 → AI 상품설명서 분석기 → AI 연
 - 표시: 결과 화면 맨 위에 HF 종신 정액형 예상 월지급금, 확정기간·우대·대출상환 방식 카드에는 종신 대비 많고 적음을 안내합니다. 이 방식들의 정확한 금액은 HF 표를 확보하면 같은 방식으로 추가할 수 있습니다.
 - 매년 3월 HF가 표를 바꾸면 `hf_payment_table.json`의 숫자와 `effective_date`만 고치면 됩니다.
 
+## 4-1. 상속 시뮬레이션과 가족 리포트
+
+- **상속 시뮬레이션** (결과 화면): 주택연금에 가입했을 때 / 가입하지 않았을 때 / 가입하지 않고 자녀가 같은 생활비를 드렸을 때, N년 뒤 자녀에게 남는 금액을 그래프로 비교합니다.
+  - 대출잔액: 초기보증료(주택가격의 1.0%)에서 시작, 매월 월지급금을 더하고 (금리 + 연보증료 0.95%)를 월 복리로 가산 (2026.3.1 기준)
+  - 집값 상승률(기본 연 1%)과 대출금리(기본 연 4%, COFIX + 0.85%p 수준 가정)는 슬라이더로 바꿀 수 있음
+  - 대출잔액이 집값을 넘는 시점을 찾아 HF **비소구**(자녀에게 청구하지 않음)를 안내
+- **가족과 함께 보기**: 카카오톡·문자로 보낼 메시지와 링크, 인쇄용 **가족 리포트(HTML)** 내려받기
+  - 링크(`?r=...`)를 열면 같은 결과와 가정이 그대로 복원되고 '가족이 보낸 결과' 안내가 나옵니다. 링크에는 이름·주소가 들어가지 않습니다.
+  - Secrets에 `APP_URL = "https://내앱.streamlit.app"`을 넣으면 완성된 링크가 만들어집니다.
+- 계산 코드는 `engine.py`의 `simulate_inheritance`, 공유·리포트는 `family.py`
+
 ## 5. 폴더 구조
 
 ```
@@ -91,6 +102,7 @@ jutaek-app/
 ├── app.py                  화면
 ├── engine.py               추천 Rule 엔진 (AI 없음)
 ├── ai_tools.py             AI 기능: 상품설명서 추출·검증·비교·승인 반영, 용어 도우미
+├── family.py               가족 공유 링크·가족 리포트
 ├── llm.py                  AI 호출 (Gemini / OpenAI / Claude, 표준 라이브러리만 사용)
 ├── data/
 │   ├── products.json       상품 DB (판정 Rule + 비교용 profile)
@@ -100,7 +112,8 @@ jutaek-app/
 │   └── samples/            시연용 가상 문서 2개
 ├── tests/
 │   ├── test_engine.py      예시 인물 4명 판정 검증
-│   └── test_ai_tools.py    가짜 AI로 분석기·도우미 검증
+│   ├── test_ai_tools.py    가짜 AI로 분석기·도우미 검증
+│   └── test_family.py      상속 시뮬레이션·공유 링크 검증
 ├── docs/AI_활용_설명.md     기획서·면접용 AI 활용 정리
 ├── .streamlit/secrets.toml.example
 └── requirements.txt
@@ -125,6 +138,7 @@ jutaek-app/
 ```bash
 python tests/test_engine.py
 python tests/test_ai_tools.py
+python tests/test_family.py
 ```
 
 > 이 서비스는 입력한 조건에 해당하는 상품 정보를 안내할 뿐, 특정 상품의 가입을 권유하지 않습니다.

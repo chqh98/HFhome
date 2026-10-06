@@ -216,3 +216,55 @@ def estimate_hf_monthly(younger_age, market_price_eok, table: dict | None = None
         notes.append(f"{age}세의 월지급금 상한({c:.1f}만 원)이 적용됐어요")
     return {"amount": round(amount, 1), "age": younger_age, "price": market_price_eok,
             "notes": notes, "method": t["method"], "date": t["effective_date"], "source": t["source"]}
+
+
+# ---------- 상속 시뮬레이션 ----------
+SIM_DEFAULTS = {
+    "house_growth": 1.0,     # 집값 상승률 (연 %, 가정)
+    "rate": 4.0,             # 대출금리 (연 %, 가정: COFIX + 0.85%p 수준)
+    "fee_initial": 1.0,      # 초기보증료 (주택가격의 %, 2026.3.1~)
+    "fee_annual": 0.95,      # 연보증료 (대출잔액의 연 %, 2026.3.1~)
+}
+
+
+def simulate_inheritance(younger_age: int, price_eok: float, monthly_manwon: float, *,
+                         house_growth: float = SIM_DEFAULTS["house_growth"], rate: float = SIM_DEFAULTS["rate"],
+                         fee_initial: float = SIM_DEFAULTS["fee_initial"], fee_annual: float = SIM_DEFAULTS["fee_annual"],
+                         max_age: int = 100, price_cap_eok: float = 12) -> list[dict]:
+    """주택연금을 받을 때와 안 받을 때, N년 뒤 정산하면 자녀에게 남는 금액(억 원)을 연도별로 계산한다.
+
+    - 대출잔액: 초기보증료로 시작해, 매달 월지급금이 더해지고 (금리 + 연보증료)/12 로 월 복리 가산
+    - 집값: 매년 house_growth % 상승 가정
+    - 가입 시 상속: max(집값 - 대출잔액, 0)  ← HF 비소구: 잔액이 집값을 넘어도 자녀에게 청구하지 않음
+    - 미가입 시 상속: 집값 그대로
+    - 미가입 + 자녀가 같은 생활비를 드린 경우: 집값 - 자녀가 드린 생활비 누적
+    """
+    house = price_eok * 10000  # 만 원
+    balance = min(price_eok, price_cap_eok) * 10000 * fee_initial / 100
+    monthly_rate = (rate + fee_annual) / 100 / 12
+    paid = 0.0
+    rows = []
+    for year in range(0, max(1, max_age - younger_age) + 1):
+        joined = max(house - balance, 0)
+        rows.append({
+            "year": year, "age": younger_age + year,
+            "house": round(house / 10000, 2), "balance": round(balance / 10000, 2),
+            "paid": round(paid / 10000, 2),
+            "inherit_joined": round(joined / 10000, 2),
+            "inherit_not_joined": round(house / 10000, 2),
+            "inherit_child_support": round((house - paid) / 10000, 2),
+            "nonrecourse_used": balance > house,
+        })
+        for _ in range(12):
+            balance = (balance + monthly_manwon) * (1 + monthly_rate)
+            paid += monthly_manwon
+        house *= 1 + house_growth / 100
+    return rows
+
+
+def sim_insight(rows: list[dict]) -> dict:
+    """그래프 아래 한 줄 설명용 핵심 수치."""
+    cross = next((r for r in rows if r["nonrecourse_used"]), None)
+    pick = {y: next((r for r in rows if r["year"] == y), None) for y in (10, 20, 30)}
+    return {"cross_year": cross["year"] if cross else None, "cross_age": cross["age"] if cross else None,
+            "at": {y: r for y, r in pick.items() if r}}
