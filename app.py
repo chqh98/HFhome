@@ -207,7 +207,7 @@ def page_intro():
         "**9개 상품**을 한 번에 비교해 드려요."
     )
     st.markdown("- 질문은 **10개 안팎**이고, 3분이면 끝나요.\n"
-                "- 모르는 내용은 **'잘 모르겠어요'**를 누르면 어디서 확인하는지 알려드려요.\n"
+                "- 모르는 내용은 '**잘 모르겠어요**'를 누르면 어디서 확인하는지 알려드려요.\n"
                 "- 이름·전화번호 같은 개인정보는 묻지 않아요.")
     st.button("시작하기", type="primary", on_click=lambda: ss.update(cur="age"))
     st.caption(DISCLAIMER)
